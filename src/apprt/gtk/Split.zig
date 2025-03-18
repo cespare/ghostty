@@ -326,6 +326,14 @@ pub fn directionMap(self: *const Split, from: Side) DirectionMap {
         result.put(.right, right);
     }
 
+    if (self.directionUp(from)) |up| {
+        result.put(.up, up);
+    }
+
+    if (self.directionDown(from)) |down| {
+        result.put(.down, down);
+    }
+
     return result;
 }
 
@@ -353,6 +361,42 @@ fn directionRight(self: *const Split, from: Side) ?*Surface {
             switch (self.orientation) {
                 .horizontal => return self.bottom_right.deepestSurface(.top_left),
                 .vertical => return directionRight(
+                    self.container.split() orelse return null,
+                    .top_left,
+                ),
+            }
+        },
+        .bottom_right => return directionRight(
+            self.container.split() orelse return null,
+            .top_left,
+        ),
+    }
+}
+
+fn directionUp(self: *const Split, from: Side) ?*Surface {
+    switch (from) {
+        .bottom_right => {
+            switch (self.orientation) {
+                .vertical => return self.top_left.deepestSurface(.bottom_right),
+                .horizontal => return directionUp(
+                    self.container.split() orelse return null,
+                    .bottom_right,
+                ),
+            }
+        },
+        .top_left => return directionUp(
+            self.container.split() orelse return null,
+            .bottom_right,
+        ),
+    }
+}
+
+fn directionDown(self: *const Split, from: Side) ?*Surface {
+    switch (from) {
+        .top_left => {
+            switch (self.orientation) {
+                .vertical => return self.bottom_right.deepestSurface(.top_left),
+                .horizontal => return directionDown(
                     self.container.split() orelse return null,
                     .top_left,
                 ),
