@@ -826,18 +826,45 @@ pub const SplitTree = extern struct {
             priv.tree_bin.setChild(built.widget);
         }
 
-        // Replacing our tree widget hierarchy can reset focus state.
-        // If we have a last-focused surface, restore focus to it.
-        if (priv.last_focused.get()) |v| {
-            defer v.unref();
-            v.grabFocus();
-        }
+        // Replacing the tree widget hierarchy resets GTK focus state.
+        // We cannot restore focus here directly because the newly created
+        // GtkPaned widgets start with position 0 and are only corrected
+        // by SplitTreeSplit.onIdle after a layout pass. With position 0,
+        // the start child can get a zero-width allocation in horizontal
+        // splits, causing GTK to immediately move focus away from it.
+        // Instead, we schedule focus restoration at a lower priority so
+        // it runs after SplitTreeSplit.onIdle has set correct positions.
+        _ = glib.idleAddFull(
+            glib.PRIORITY_DEFAULT_IDLE + 1,
+            onRestoreFocus,
+            self,
+            null,
+        );
 
         // Our split status may have changed
         self.as(gobject.Object).notifyByPspec(properties.@"is-split".impl.param_spec);
 
         // Our active surface may have changed
         self.as(gobject.Object).notifyByPspec(properties.@"active-surface".impl.param_spec);
+
+        return 0;
+    }
+
+    /// Restore focus to the last-focused surface. This is scheduled by
+    /// onRebuild at a lower priority than the default idle priority so
+    /// that it runs after SplitTreeSplit.onIdle has set correct Paned
+    /// positions. Without this delay, the focused surface can get a
+    /// zero-size allocation from the Paned's initial position (0),
+    /// causing GTK to move focus away from it before the positions are
+    /// corrected.
+    fn onRestoreFocus(ud: ?*anyopaque) callconv(.c) c_int {
+        const self: *Self = @ptrCast(@alignCast(ud orelse return 0));
+        const priv = self.private();
+
+        if (priv.last_focused.get()) |v| {
+            defer v.unref();
+            v.grabFocus();
+        }
 
         return 0;
     }
